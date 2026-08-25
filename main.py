@@ -6,10 +6,9 @@ bot = telebot.TeleBot(TOKEN)
 
 ADMIN_ID = 8818031245  
 
-# Optional: Channels users must join (e.g., ["@YourChannelUsername"])
 REQUIRED_CHANNELS = [] 
 
-# Dynamic Stock Database: Keys will be formatted as "platform_country" (e.g., "whatsapp_nigeria", "whatsapp_usa")
+# Dynamic Stock Database
 stock_db = {
     "whatsapp_togo": ["2287383833", "2287383639"],
     "tiktok_global": ["1928374859"]
@@ -21,7 +20,6 @@ user_state = {}
 user_data = {}
 
 def check_user_subscription(user_id):
-    """Checks if the user has joined the required Telegram channels."""
     if not REQUIRED_CHANNELS:
         return True
     for channel in REQUIRED_CHANNELS:
@@ -55,13 +53,12 @@ def send_welcome(message):
             if ref_id != chat_id:
                 referrals[chat_id] = ref_id
 
-    # Check channel subscription if enabled
     if not check_user_subscription(chat_id):
         markup = types.InlineKeyboardMarkup()
         for ch in REQUIRED_CHANNELS:
             markup.add(types.InlineKeyboardButton(f"📢 Join {ch}", url=f"https://t.me/{ch.replace('@','')}"))
         markup.add(types.InlineKeyboardButton("🔄 I have joined", callback_data="check_sub"))
-        bot.send_message(chat_id, "❌ **You must join our update channels before using this bot!**\n\nJoin below and click 'I have joined':", parse_mode="Markdown", reply_markup=markup)
+        bot.send_message(chat_id, "❌ **You must join our update channels before using this bot!**", parse_mode="Markdown", reply_markup=markup)
         return
 
     bot.send_message(
@@ -83,7 +80,6 @@ def handle_text(message):
 
     current_step = user_state.get(chat_id)
 
-    # --- ADMIN: ADDING CUSTOM STOCK & COUNTRY ---
     if current_step and current_step.startswith("adding_stock_") and chat_id == ADMIN_ID:
         target_key = current_step.replace("adding_stock_", "")
         new_items = [item.strip() for item in text.split("\n") if item.strip()]
@@ -101,10 +97,9 @@ def handle_text(message):
             reply_markup=get_main_menu_keyboard(chat_id)
         )
 
-        # Broadcast stock update alert to all users (Like Amir Bot style!)
-        parts = target_key.split("_")
+        parts = target_key.split("_", 1)
         platform_name = parts[0].upper()
-        country_name = parts[1].upper()
+        country_name = parts[1].upper() if len(parts) > 1 else "GLOBAL"
         
         broadcast_msg = f"🇳🇬/🌍 <b>New Stock Added</b> ⬆️\n\n📌 Platform: <b>{platform_name}</b>\n🌍 Country: <b>{country_name}</b>\n📦 TOTAL: <b>{total_left} Numbers</b>\n💳 Status: Ready for use!"
         for uid in all_users:
@@ -116,9 +111,7 @@ def handle_text(message):
                 pass
         return
 
-    # --- ADMIN: CREATING NEW CUSTOM COUNTRY CATEGORY ---
     if current_step == "creating_custom_category" and chat_id == ADMIN_ID:
-        # Expected format: platform,country (e.g. whatsapp,nigeria)
         parts = [p.strip().lower() for p in text.split(",")]
         if len(parts) == 2:
             custom_key = f"{parts[0]}_{parts[1]}"
@@ -128,7 +121,6 @@ def handle_text(message):
             bot.send_message(chat_id, "❌ Format incorrect. Please use `platform,country` (e.g., `whatsapp,nigeria`)", parse_mode="Markdown")
         return
 
-    # --- WITHDRAWAL WORKFLOW ---
     if current_step == "waiting_for_account":
         user_data[chat_id] = {"account_info": text}
         user_state[chat_id] = "waiting_for_withdrawal_amount"
@@ -142,7 +134,6 @@ def handle_text(message):
         bot.send_message(chat_id, "✅ **Withdrawal request submitted successfully to admin!**", parse_mode="Markdown", reply_markup=get_main_menu_keyboard(chat_id))
         return
 
-    # --- MAIN MENU HANDLERS ---
     if text == "🚀 Get Number":
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
@@ -222,7 +213,8 @@ def handle_callbacks(call):
             return
 
         for key in matching_keys:
-            country_name = key.split("_")[1].upper()
+            parts = key.split("_", 1)
+            country_name = parts[1].upper() if len(parts) > 1 else "GLOBAL"
             count = len(stock_db[key])
             markup.add(types.InlineKeyboardButton(f"🌍 {country_name} — TOTAL : {count} Numbers", callback_data=f"get_{key}"))
         
@@ -232,7 +224,7 @@ def handle_callbacks(call):
         stock_key = data.replace("get_", "")
         if stock_key in stock_db and len(stock_db[stock_key]) > 0:
             
-            # Dispense up to 3 numbers at a time
+            # Dispense up to 3 numbers at a time cleanly
             take_count = min(3, len(stock_db[stock_key]))
             assigned_numbers = stock_db[stock_key][:take_count]
             del stock_db[stock_key][:take_count]
@@ -261,4 +253,4 @@ def handle_callbacks(call):
 if __name__ == "__main__":
     print("Bot is booting up...")
     bot.infinity_polling(timeout=10, long_polling_timeout=5)
-    
+                                       
